@@ -1,16 +1,80 @@
 import bpy
 
 from . import presets
+from . import shape_sets
 
 
-class NYANWTOOLS_BlendshapeItem(bpy.types.PropertyGroup):
+class NYANWTOOL_BlendshapeItem(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty()
+
+    family: bpy.props.StringProperty()
+
     preset_index: bpy.props.IntProperty()
-    blendshape_index: bpy.props.IntProperty()
+
+    exists: bpy.props.BoolProperty(
+        default=False,
+    )
+
+    selected: bpy.props.BoolProperty(
+        default=False,
+    )
 
 
-class NYANWTOOLS_UL_BlendshapeList(bpy.types.UIList):
-    bl_idname = "NYANWTOOLS_UL_BlendshapeList"
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+    ensure_scene_properties()
+
+    try:
+        scene = bpy.context.scene
+    except Exception:
+        scene = None
+
+    if scene is not None:
+        rebuild_list(scene)
+
+
+def ensure_scene_properties():
+    if not hasattr(bpy.types.Scene, "nyanwtool_blendshapes"):
+        bpy.types.Scene.nyanwtool_blendshapes = bpy.props.CollectionProperty(
+            type=NYANWTOOL_BlendshapeItem,
+        )
+
+    if not hasattr(bpy.types.Scene, "nyanwtool_blendshape_index"):
+        bpy.types.Scene.nyanwtool_blendshape_index = bpy.props.IntProperty()
+
+    if not hasattr(bpy.types.Scene, "nyanwtool_current_preset_index"):
+        bpy.types.Scene.nyanwtool_current_preset_index = bpy.props.IntProperty(
+            default=-1,
+        )
+
+
+def unregister():
+    del bpy.types.Scene.nyanwtool_current_preset_index
+    del bpy.types.Scene.nyanwtool_blendshape_index
+    del bpy.types.Scene.nyanwtool_blendshapes
+
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
+
+class NYANWTOOL_UL_BlendshapeList(bpy.types.UIList):
+    bl_idname = "NYANWTOOL_UL_BlendshapeList"
+
+    def filter_items(self, context, data, propname):
+        blendshape_items = getattr(data, propname)
+        current_preset_index = getattr(context.scene, "nyanwtool_current_preset_index", -1)
+
+        visible = [
+            self.bitflag_filter_item
+            if item.preset_index == current_preset_index
+            else 0
+            for item in blendshape_items
+        ]
+
+        return visible, list(range(len(blendshape_items)))
 
     def draw_item(
         self,
@@ -20,100 +84,38 @@ class NYANWTOOLS_UL_BlendshapeList(bpy.types.UIList):
         item,
         icon,
         active_data,
-        active_propname,
+        active_property,
         index,
     ):
-        layout.label(text=item.name)
+        row = layout.row(align=True)
+        row.prop(item, "selected", text="", emboss=False)
 
+        if shape_sets.blendshape_exists(context.object, item.name):
+            row.label(text=item.name, icon='CHECKMARK')
+        else:
+            row.label(text=item.name, icon='CANCEL')
 
-# ------------------------------------------------------------------------
-# Collection helpers
-# ------------------------------------------------------------------------
-
-_COLLECTION_NAMES = (
-    "nyanwtools_list_0",
-    "nyanwtools_list_1",
-    "nyanwtools_list_2",
-    "nyanwtools_list_3",
-    "nyanwtools_list_4",
-)
-
-_INDEX_NAMES = (
-    "nyanwtools_index_0",
-    "nyanwtools_index_1",
-    "nyanwtools_index_2",
-    "nyanwtools_index_3",
-    "nyanwtools_index_4",
-)
-
-
-def get_collection_name(preset_index):
-    return _COLLECTION_NAMES[preset_index]
-
-
-def get_index_name(preset_index):
-    return _INDEX_NAMES[preset_index]
-
-
-def get_collection(scene, preset_index):
-    return getattr(scene, get_collection_name(preset_index))
-
-
-def rebuild_lists(scene):
-    for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
-
-        collection = get_collection(scene, preset_index)
-        collection.clear()
-
-        for blendshape_index, blendshape_name in enumerate(preset["blendshapes"]):
-
-            item = collection.add()
-            item.name = blendshape_name
-            item.preset_index = preset_index
-            item.blendshape_index = blendshape_index
-
-
-# ------------------------------------------------------------------------
-# Register
-# ------------------------------------------------------------------------
 
 classes = (
-    NYANWTOOLS_BlendshapeItem,
-    NYANWTOOLS_UL_BlendshapeList,
+    NYANWTOOL_BlendshapeItem,
+    NYANWTOOL_UL_BlendshapeList,
 )
 
 
-def register():
+def rebuild_list(scene):
+    previous_selection = {
+        (item.preset_index, item.name): item.selected
+        for item in scene.nyanwtool_blendshapes
+    }
 
-    for cls in classes:
-        bpy.utils.register_class(cls)
+    collection = scene.nyanwtool_blendshapes
+    collection.clear()
 
-    for collection_name in _COLLECTION_NAMES:
-        setattr(
-            bpy.types.Scene,
-            collection_name,
-            bpy.props.CollectionProperty(
-                type=NYANWTOOLS_BlendshapeItem,
-            ),
-        )
-
-    for index_name in _INDEX_NAMES:
-        setattr(
-            bpy.types.Scene,
-            index_name,
-            bpy.props.IntProperty(),
-        )
-
-
-def unregister():
-
-    for collection_name in _COLLECTION_NAMES:
-        if hasattr(bpy.types.Scene, collection_name):
-            delattr(bpy.types.Scene, collection_name)
-
-    for index_name in _INDEX_NAMES:
-        if hasattr(bpy.types.Scene, index_name):
-            delattr(bpy.types.Scene, index_name)
-
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+    for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
+        for blendshape in preset["blendshapes"]:
+            item = collection.add()
+            item.name = blendshape
+            item.family = preset["name"]
+            item.preset_index = preset_index
+            item.selected = previous_selection.get((preset_index, blendshape), False)
+            item.exists = shape_sets.blendshape_exists(scene.object, blendshape)

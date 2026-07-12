@@ -3,6 +3,7 @@ import os
 import bpy
 import bpy.utils.previews
 
+from . import blendshape_list
 from . import operators
 from . import presets
 from . import shape_sets
@@ -106,37 +107,15 @@ def draw_status_operator(layout, operator_idname, status, text, is_selected):
         depress=is_selected,
     )
 
-def draw_blendshape_row(layout, context, active_object, preset_index, blendshape_index, blendshape_name):
-    row = layout.row(align=True)
-    row.separator()
-    
-    selected_property_name = operators.get_blendshape_selected_property_name(
-        preset_index,
-        blendshape_index,
-    )
-    status = shape_sets.calculate_blendshape_status(active_object, blendshape_name)
-    is_selected = getattr(context.scene, selected_property_name)
-    
-    toggle_operator = draw_status_operator(
-        row,
-        "nyanwtools.toggle_blendshape_selection",
-        status,
-        blendshape_name,
-        is_selected,
-    )
-    toggle_operator.preset_index = preset_index
-    toggle_operator.blendshape_index = blendshape_index
-
 def draw_preset_row(layout, context, active_object, preset_index, preset):
     status, existing_count, total_count = shape_sets.calculate_preset_status(
         active_object,
         preset,
     )
 
-    selected_property_name = operators.get_family_selected_property_name(preset_index)
     expanded_property_name = operators.get_family_expanded_property_name(preset_index)
-    is_expanded = getattr(context.scene, expanded_property_name)
-    is_selected = getattr(context.scene, selected_property_name)
+    is_expanded = getattr(context.scene, expanded_property_name, False)
+    is_selected = operators.is_family_selected(context.scene, preset_index)
 
     row = layout.row(align=True)
     row.prop(
@@ -146,11 +125,12 @@ def draw_preset_row(layout, context, active_object, preset_index, preset):
         icon='TRIA_DOWN' if is_expanded else 'TRIA_RIGHT',
         emboss=False,
     )
+    selected_count = operators.count_selected_blendshapes(context.scene, preset_index)
     toggle_operator = draw_status_operator(
         row,
-        "nyanwtools.toggle_family_selection",
+        "nyanwtool.toggle_family_selection",
         status,
-        f"{preset['name']} {existing_count}/{total_count}",
+        f"{preset['name']} {existing_count}/{total_count} ({selected_count})",
         is_selected,
     )
     toggle_operator.preset_index = preset_index
@@ -158,25 +138,25 @@ def draw_preset_row(layout, context, active_object, preset_index, preset):
     if not is_expanded:
         return
 
+    context.scene.nyanwtool_current_preset_index = preset_index
     column = layout.column(align=True)
+    column.template_list(
+        "NYANWTOOL_UL_BlendshapeList",
+        f"family_{preset_index}",
+        context.scene,
+        "nyanwtool_blendshapes",
+        context.scene,
+        "nyanwtool_blendshape_index",
+        rows=min(6, len(preset["blendshapes"])),
+    )
 
-    for blendshape_index, blendshape_name in enumerate(preset["blendshapes"]):
-        draw_blendshape_row(
-            column,
-            context,
-            active_object,
-            preset_index,
-            blendshape_index,
-            blendshape_name,
-        )
-
-class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
-    bl_label = "NyanwTools"
-    bl_idname = "NYANWTOOLS_PT_main_panel"
+class NYANWTOOL_PT_MainPanel(bpy.types.Panel):
+    bl_label = "NyanwTool"
+    bl_idname = "NYANWTOOL_PT_main_panel"
 
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "NyanwTools"
+    bl_category = "NyanwTool"
 
     def draw(self, context):
         layout = self.layout
@@ -191,6 +171,15 @@ class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
         header_row = box.row(align=True)
         header_row.label(text="Blendshape Sets", icon='SHAPEKEY_DATA')
 
+        if not hasattr(context.scene, "nyanwtool_blendshapes"):
+            blendshape_list.ensure_scene_properties()
+
+        operators.register_scene_properties()
+
+        expected_count = sum(len(preset["blendshapes"]) for preset in presets.BLENDSHAPE_PRESETS)
+        if len(context.scene.nyanwtool_blendshapes) != expected_count:
+            blendshape_list.rebuild_list(context.scene)
+
         for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
             draw_preset_row(
                 box,
@@ -200,9 +189,9 @@ class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
                 preset,
             )
 
-        box.operator("nyanwtools.create_blendshapes", icon='ADD')
-        box.operator("nyanwtools.flip_selected_blendshape", icon='MOD_MIRROR')
-        box.operator("nyanwtools.clear_blendshape_selection", icon='CANCEL')
+        box.operator("nyanwtool.create_blendshapes", icon='ADD')
+        box.operator("nyanwtool.flip_selected_blendshape", icon='MOD_MIRROR')
+        box.operator("nyanwtool.clear_blendshape_selection", icon='CANCEL')
 
         #
         # Derived
@@ -213,7 +202,7 @@ class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
         box.label(text="Coming soon...")
 
 classes = (
-    NYANWTOOLS_PT_MainPanel,
+    NYANWTOOL_PT_MainPanel,
 )
 
 def register():

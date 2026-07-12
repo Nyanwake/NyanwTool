@@ -5,141 +5,77 @@ from . import presets
 from . import shape_sets
 
 
-FAMILY_SELECTED_PROPERTY_PREFIX = "nyanwtools_family_selected_"
-FAMILY_EXPANDED_PROPERTY_PREFIX = "nyanwtools_family_expanded_"
-BLENDSHAPE_SELECTED_PROPERTY_PREFIX = "nyanwtools_blendshape_selected_"
-
-
-def get_family_selected_property_name(preset_index):
-    return f"{FAMILY_SELECTED_PROPERTY_PREFIX}{preset_index}"
+FAMILY_EXPANDED_PROPERTY_PREFIX = "nyanwtool_family_expanded_"
 
 
 def get_family_expanded_property_name(preset_index):
     return f"{FAMILY_EXPANDED_PROPERTY_PREFIX}{preset_index}"
 
 
-def get_blendshape_selected_property_name(preset_index, blendshape_index):
-    return f"{BLENDSHAPE_SELECTED_PROPERTY_PREFIX}{preset_index}_{blendshape_index}"
-
-
 def is_family_selected(scene, preset_index):
-    property_name = get_family_selected_property_name(preset_index)
+    preset_items = [
+        item
+        for item in scene.nyanwtool_blendshapes
+        if item.preset_index == preset_index
+    ]
 
-    return getattr(scene, property_name)
+    if not preset_items:
+        return False
 
-
-def is_blendshape_selected(scene, preset_index, blendshape_index):
-    property_name = get_blendshape_selected_property_name(
-        preset_index,
-        blendshape_index,
-    )
-
-    return getattr(scene, property_name)
+    return all(item.selected for item in preset_items)
 
 
 def set_family_blendshapes_selected(scene, preset_index, is_selected):
-    preset = presets.BLENDSHAPE_PRESETS[preset_index]
-
-    for blendshape_index, _blendshape_name in enumerate(preset["blendshapes"]):
-        property_name = get_blendshape_selected_property_name(
-            preset_index,
-            blendshape_index,
-        )
-
-        setattr(scene, property_name, is_selected)
-
-
-def are_all_family_blendshapes_selected(scene, preset_index):
-    preset = presets.BLENDSHAPE_PRESETS[preset_index]
-
-    if not preset["blendshapes"]:
-        return False
-
-    for blendshape_index, _blendshape_name in enumerate(preset["blendshapes"]):
-        if not is_blendshape_selected(scene, preset_index, blendshape_index):
-            return False
-
-    return True
-
-
-def update_family_selection(scene, preset_index):
-    property_name = get_family_selected_property_name(preset_index)
-    is_selected = are_all_family_blendshapes_selected(scene, preset_index)
-
-    setattr(scene, property_name, is_selected)
+    for item in scene.nyanwtool_blendshapes:
+        if item.preset_index == preset_index:
+            item.selected = is_selected
 
 
 def clear_blendshape_selection(scene):
-    for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
-        family_property_name = get_family_selected_property_name(preset_index)
-        setattr(scene, family_property_name, False)
-
-        for blendshape_index, _blendshape_name in enumerate(preset["blendshapes"]):
-            blendshape_property_name = get_blendshape_selected_property_name(
-                preset_index,
-                blendshape_index,
-            )
-            setattr(scene, blendshape_property_name, False)
+    for item in scene.nyanwtool_blendshapes:
+        item.selected = False
 
 
 def get_selected_blendshapes(scene):
     selected_blendshapes = {}
 
-    for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
-        blendshape_names = []
+    for item in scene.nyanwtool_blendshapes:
+        if not item.selected:
+            continue
 
-        for blendshape_index, blendshape_name in enumerate(preset["blendshapes"]):
-            if is_blendshape_selected(scene, preset_index, blendshape_index):
-                blendshape_names.append(blendshape_name)
-
-        if blendshape_names:
-            selected_blendshapes[preset_index] = list(dict.fromkeys(blendshape_names))
+        selected_blendshapes.setdefault(item.preset_index, []).append(item.name)
 
     return selected_blendshapes
 
 
 def get_selected_blendshape_names(scene):
-    selected_names = []
+    return list(
+        dict.fromkeys(
+            item.name
+            for item in scene.nyanwtool_blendshapes
+            if item.selected
+        )
+    )
 
-    for blendshape_names in get_selected_blendshapes(scene).values():
-        selected_names.extend(blendshape_names)
 
-    return list(dict.fromkeys(selected_names))
+def count_selected_blendshapes(scene, preset_index):
+    return sum(
+        1
+        for item in scene.nyanwtool_blendshapes
+        if item.preset_index == preset_index and item.selected
+    )
 
 
 def register_scene_properties():
     for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
-        family_selected_property_name = get_family_selected_property_name(preset_index)
-        family_expanded_property_name = get_family_expanded_property_name(preset_index)
+        property_name = get_family_expanded_property_name(preset_index)
 
-        setattr(
-            bpy.types.Scene,
-            family_selected_property_name,
-            bpy.props.BoolProperty(
-                name=preset["name"],
-                default=False,
-            ),
-        )
-        setattr(
-            bpy.types.Scene,
-            family_expanded_property_name,
-            bpy.props.BoolProperty(
-                name=f"Show {preset['name']}",
-                default=False,
-            ),
-        )
-
-        for blendshape_index, blendshape_name in enumerate(preset["blendshapes"]):
-            blendshape_selected_property_name = get_blendshape_selected_property_name(
-                preset_index,
-                blendshape_index,
-            )
-
+        if not hasattr(bpy.types.Scene, property_name):
             setattr(
                 bpy.types.Scene,
-                blendshape_selected_property_name,
+                property_name,
                 bpy.props.BoolProperty(
-                    name=blendshape_name,
+                    name=f"Show {preset['name']}",
                     default=False,
                 ),
             )
@@ -147,27 +83,14 @@ def register_scene_properties():
 
 def unregister_scene_properties():
     for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
-        family_selected_property_name = get_family_selected_property_name(preset_index)
-        family_expanded_property_name = get_family_expanded_property_name(preset_index)
+        property_name = get_family_expanded_property_name(preset_index)
 
-        if hasattr(bpy.types.Scene, family_selected_property_name):
-            delattr(bpy.types.Scene, family_selected_property_name)
-
-        if hasattr(bpy.types.Scene, family_expanded_property_name):
-            delattr(bpy.types.Scene, family_expanded_property_name)
-
-        for blendshape_index, _blendshape_name in enumerate(preset["blendshapes"]):
-            blendshape_selected_property_name = get_blendshape_selected_property_name(
-                preset_index,
-                blendshape_index,
-            )
-
-            if hasattr(bpy.types.Scene, blendshape_selected_property_name):
-                delattr(bpy.types.Scene, blendshape_selected_property_name)
+        if hasattr(bpy.types.Scene, property_name):
+            delattr(bpy.types.Scene, property_name)
 
 
-class NYANWTOOLS_OT_CreateBlendshapes(bpy.types.Operator):
-    bl_idname = "nyanwtools.create_blendshapes"
+class NYANWTOOL_OT_CreateBlendshapes(bpy.types.Operator):
+    bl_idname = "nyanwtool.create_blendshapes"
     bl_label = "Create Blendshapes"
     bl_description = "Create selected missing Blendshapes"
     bl_options = {'REGISTER', 'UNDO'}
@@ -204,8 +127,8 @@ class NYANWTOOLS_OT_CreateBlendshapes(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOLS_OT_FlipSelectedBlendshape(bpy.types.Operator):
-    bl_idname = "nyanwtools.flip_selected_blendshape"
+class NYANWTOOL_OT_FlipSelectedBlendshape(bpy.types.Operator):
+    bl_idname = "nyanwtool.flip_selected_blendshape"
     bl_label = "Flip Selected Blendshapes"
     bl_description = "Copy selected Left or Right Blendshapes to their opposite side"
     bl_options = {'REGISTER', 'UNDO'}
@@ -224,7 +147,7 @@ class NYANWTOOLS_OT_FlipSelectedBlendshape(bpy.types.Operator):
         selected_blendshape_names = get_selected_blendshape_names(context.scene)
 
         if not selected_blendshape_names:
-            self.report({'ERROR'}, "Select at least one Blendshape in NyanwTools.")
+            self.report({'ERROR'}, "Select at least one Blendshape in NyanwTool.")
             return {'CANCELLED'}
 
         mirrored_count, skipped_count = mirror.create_mirrored_blendshapes(
@@ -246,10 +169,10 @@ class NYANWTOOLS_OT_FlipSelectedBlendshape(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOLS_OT_ClearBlendshapeSelection(bpy.types.Operator):
-    bl_idname = "nyanwtools.clear_blendshape_selection"
+class NYANWTOOL_OT_ClearBlendshapeSelection(bpy.types.Operator):
+    bl_idname = "nyanwtool.clear_blendshape_selection"
     bl_label = "Clear Selection"
-    bl_description = "Clear selected Blendshapes in NyanwTools"
+    bl_description = "Clear selected Blendshapes in NyanwTool"
     bl_options = {'INTERNAL'}
 
     def execute(self, context):
@@ -258,8 +181,8 @@ class NYANWTOOLS_OT_ClearBlendshapeSelection(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOLS_OT_ToggleFamilySelection(bpy.types.Operator):
-    bl_idname = "nyanwtools.toggle_family_selection"
+class NYANWTOOL_OT_ToggleFamilySelection(bpy.types.Operator):
+    bl_idname = "nyanwtool.toggle_family_selection"
     bl_label = "Toggle Blendshape Family"
     bl_description = "Select or deselect this Blendshape family"
     bl_options = {'INTERNAL'}
@@ -267,44 +190,17 @@ class NYANWTOOLS_OT_ToggleFamilySelection(bpy.types.Operator):
     preset_index: bpy.props.IntProperty()
 
     def execute(self, context):
-        property_name = get_family_selected_property_name(self.preset_index)
-        current_value = getattr(context.scene, property_name)
-        new_value = not current_value
-
-        setattr(context.scene, property_name, new_value)
-        set_family_blendshapes_selected(context.scene, self.preset_index, new_value)
-
-        return {'FINISHED'}
-
-
-class NYANWTOOLS_OT_ToggleBlendshapeSelection(bpy.types.Operator):
-    bl_idname = "nyanwtools.toggle_blendshape_selection"
-    bl_label = "Toggle Blendshape"
-    bl_description = "Select or deselect this Blendshape"
-    bl_options = {'INTERNAL'}
-
-    preset_index: bpy.props.IntProperty()
-    blendshape_index: bpy.props.IntProperty()
-
-    def execute(self, context):
-        property_name = get_blendshape_selected_property_name(
-            self.preset_index,
-            self.blendshape_index,
-        )
-        current_value = getattr(context.scene, property_name)
-
-        setattr(context.scene, property_name, not current_value)
-        update_family_selection(context.scene, self.preset_index)
+        current_value = is_family_selected(context.scene, self.preset_index)
+        set_family_blendshapes_selected(context.scene, self.preset_index, not current_value)
 
         return {'FINISHED'}
 
 
 classes = (
-    NYANWTOOLS_OT_CreateBlendshapes,
-    NYANWTOOLS_OT_FlipSelectedBlendshape,
-    NYANWTOOLS_OT_ClearBlendshapeSelection,
-    NYANWTOOLS_OT_ToggleFamilySelection,
-    NYANWTOOLS_OT_ToggleBlendshapeSelection,
+    NYANWTOOL_OT_CreateBlendshapes,
+    NYANWTOOL_OT_FlipSelectedBlendshape,
+    NYANWTOOL_OT_ClearBlendshapeSelection,
+    NYANWTOOL_OT_ToggleFamilySelection,
 )
 
 

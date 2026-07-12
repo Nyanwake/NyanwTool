@@ -1,6 +1,6 @@
-# NyanwTools - Coding Style Guide
+# NyanwTool - Coding Style Guide
 
-This document defines the coding style and development rules for the NyanwTools Blender addon.
+This document defines the coding style and development rules for the NyanwTool Blender addon.
 
 The goal is to keep the codebase clean, maintainable, and easy to extend over many versions.
 
@@ -296,7 +296,7 @@ Every new feature should answer one question:
 
 "Does this reduce repetitive work?"
 
-If not, it probably does not belong in NyanwTools.
+If not, it probably does not belong in NyanwTool.
 
 Keep the addon focused.
 
