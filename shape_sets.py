@@ -1,3 +1,5 @@
+from . import presets
+
 STATUS_GREEN = "GREEN"
 STATUS_YELLOW = "YELLOW"
 STATUS_RED = "RED"
@@ -90,6 +92,52 @@ def get_last_shape_key_name(active_object):
         return None
 
     return shape_key_names[-1]
+
+
+def sort_shape_keys(active_object):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+    if shape_key_blocks is None:
+        return
+
+    shape_key_names = [shape_key.name for shape_key in shape_key_blocks]
+    if not shape_key_names:
+        return
+
+    basis_name = "Basis"
+    has_basis = basis_name in shape_key_names
+
+    preset_order = []
+    for preset in presets.BLENDSHAPE_PRESETS:
+        for blendshape_name in preset["blendshapes"]:
+            if blendshape_name in shape_key_names:
+                preset_order.append(blendshape_name)
+
+    remaining_names = [
+        name
+        for name in shape_key_names
+        if name != basis_name and name not in preset_order
+    ]
+
+    desired_order = []
+    if has_basis:
+        desired_order.append(basis_name)
+    desired_order.extend(preset_order)
+    desired_order.extend(remaining_names)
+
+    if shape_key_names == desired_order:
+        return
+
+    original_active_shape_key = get_active_shape_key_name(active_object)
+
+    for target_index, shape_key_name in enumerate(desired_order):
+        current_index = shape_key_blocks.find(shape_key_name)
+
+        if current_index < 0 or current_index == target_index:
+            continue
+
+        move_shape_key_block(shape_key_blocks, current_index, target_index)
+
+    set_active_shape_key(active_object, original_active_shape_key)
 
 
 def has_user_blendshapes(active_object):
