@@ -77,7 +77,7 @@ def copy_shape_key_coordinates(source_shape_key, destination_shape_key):
 
 
 def get_unique_temp_blendshape_name(active_object):
-    base_name = "__NyanwToolTempMirror"
+    base_name = "__NyanwToolsTempMirror"
     temp_name = base_name
     suffix = 1
 

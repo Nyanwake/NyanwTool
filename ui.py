@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 import bpy
 import bpy.utils.previews
@@ -119,7 +119,7 @@ def draw_blendshape_row(layout, context, active_object, preset_index, blendshape
     
     toggle_operator = draw_status_operator(
         row,
-        "nyanwtool.toggle_blendshape_selection",
+        "nyanwtools.toggle_blendshape_selection",
         status,
         blendshape_name,
         is_selected,
@@ -148,7 +148,7 @@ def draw_preset_row(layout, context, active_object, preset_index, preset):
     )
     toggle_operator = draw_status_operator(
         row,
-        "nyanwtool.toggle_family_selection",
+        "nyanwtools.toggle_family_selection",
         status,
         f"{preset['name']} {existing_count}/{total_count}",
         is_selected,
@@ -170,13 +170,13 @@ def draw_preset_row(layout, context, active_object, preset_index, preset):
             blendshape_name,
         )
 
-class NYANWTOOL_PT_MainPanel(bpy.types.Panel):
-    bl_label = "NyanwTool"
-    bl_idname = "NYANWTOOL_PT_main_panel"
+class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
+    bl_label = "NyanwTools"
+    bl_idname = "NYANWTOOLS_PT_main_panel"
 
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "NyanwTool"
+    bl_category = "NyanwTools"
 
     def draw(self, context):
         layout = self.layout
@@ -200,20 +200,13 @@ class NYANWTOOL_PT_MainPanel(bpy.types.Panel):
                 preset,
             )
 
-        box.operator("nyanwtool.create_blendshapes", icon='ADD')
-        box.operator("nyanwtool.flip_selected_blendshape", icon='MOD_MIRROR')
-        box.operator("nyanwtool.clear_blendshape_selection", icon='CANCEL')
-
-        #
-        # Derived
-        #
-        box = layout.box()
-        box.label(text="Combine Blendshapes", icon='SHAPEKEY_DATA')
-
-        box.label(text="Coming soon...")
+        box.operator("nyanwtools.create_blendshapes", icon='ADD')
+        box.operator("nyanwtools.flip_selected_blendshape", text="Flip Blendshape", icon='MOD_MIRROR')
+        box.operator("nyanwtools.combine_blendshape", text="Combine Blendshape", icon='SHAPEKEY_DATA')
+        box.operator("nyanwtools.clear_blendshape_selection", icon='CANCEL')
 
 classes = (
-    NYANWTOOL_PT_MainPanel,
+    NYANWTOOLS_PT_MainPanel,
 )
 
 def register():

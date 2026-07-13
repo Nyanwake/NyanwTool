@@ -1,2 +1,2 @@
-# NyanwTool
-Nyanwake's Blendshape Tool
+# NyanwTools
+NyanWake's Blendshape Tool

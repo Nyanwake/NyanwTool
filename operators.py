@@ -1,13 +1,14 @@
-import bpy
+﻿import bpy
 
+from . import derived
 from . import mirror
 from . import presets
 from . import shape_sets
 
 
-FAMILY_SELECTED_PROPERTY_PREFIX = "NYANWTOOL_family_selected_"
-FAMILY_EXPANDED_PROPERTY_PREFIX = "NYANWTOOL_family_expanded_"
-BLENDSHAPE_SELECTED_PROPERTY_PREFIX = "NYANWTOOL_blendshape_selected_"
+FAMILY_SELECTED_PROPERTY_PREFIX = "NYANWTOOLS_family_selected_"
+FAMILY_EXPANDED_PROPERTY_PREFIX = "NYANWTOOLS_family_expanded_"
+BLENDSHAPE_SELECTED_PROPERTY_PREFIX = "NYANWTOOLS_blendshape_selected_"
 
 
 def get_family_selected_property_name(preset_index):
@@ -98,6 +99,16 @@ def get_selected_blendshapes(scene):
     return selected_blendshapes
 
 
+def get_selected_blendshape_items(scene):
+    selected_items = []
+
+    for preset_index, blendshape_names in get_selected_blendshapes(scene).items():
+        for blendshape_name in blendshape_names:
+            selected_items.append((preset_index, blendshape_name))
+
+    return selected_items
+
+
 def get_selected_blendshape_names(scene):
     selected_names = []
 
@@ -166,8 +177,8 @@ def unregister_scene_properties():
                 delattr(bpy.types.Scene, blendshape_selected_property_name)
 
 
-class NYANWTOOL_OT_CreateBlendshapes(bpy.types.Operator):
-    bl_idname = "nyanwtool.create_blendshapes"
+class NYANWTOOLS_OT_CreateBlendshapes(bpy.types.Operator):
+    bl_idname = "nyanwtools.create_blendshapes"
     bl_label = "Create Blendshapes"
     bl_description = "Create selected missing Blendshapes"
     bl_options = {'REGISTER', 'UNDO'}
@@ -200,17 +211,15 @@ class NYANWTOOL_OT_CreateBlendshapes(bpy.types.Operator):
             )
             created_count += created
 
-        if created_count > 0:
-            shape_sets.sort_shape_keys(active_object)
 
         self.report({'INFO'}, f"Created {created_count} Blendshape(s).")
 
         return {'FINISHED'}
 
 
-class NYANWTOOL_OT_FlipSelectedBlendshape(bpy.types.Operator):
-    bl_idname = "nyanwtool.flip_selected_blendshape"
-    bl_label = "Flip Selected Blendshapes"
+class NYANWTOOLS_OT_FlipSelectedBlendshape(bpy.types.Operator):
+    bl_idname = "nyanwtools.flip_selected_blendshape"
+    bl_label = "Flip Blendshape"
     bl_description = "Copy selected Left or Right Blendshapes to their opposite side"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -228,7 +237,7 @@ class NYANWTOOL_OT_FlipSelectedBlendshape(bpy.types.Operator):
         selected_blendshape_names = get_selected_blendshape_names(context.scene)
 
         if not selected_blendshape_names:
-            self.report({'ERROR'}, "Select at least one Blendshape in NyanwTool.")
+            self.report({'ERROR'}, "Select at least one Blendshape in NyanwTools.")
             return {'CANCELLED'}
 
         mirrored_count, skipped_count = mirror.create_mirrored_blendshapes(
@@ -250,10 +259,119 @@ class NYANWTOOL_OT_FlipSelectedBlendshape(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOL_OT_ClearBlendshapeSelection(bpy.types.Operator):
-    bl_idname = "nyanwtool.clear_blendshape_selection"
+class NYANWTOOLS_OT_CombineBlendshape(bpy.types.Operator):
+    bl_idname = "nyanwtools.combine_blendshape"
+    bl_label = "Combine Blendshape"
+    bl_description = "Create or overwrite a Blendshape from the current Shape Key mix"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    combine_mode: bpy.props.StringProperty(default="", options={'SKIP_SAVE'})
+    target_preset_index: bpy.props.IntProperty(default=-1, options={'SKIP_SAVE'})
+    target_blendshape_name: bpy.props.StringProperty(default="", options={'SKIP_SAVE'})
+    new_blendshape_name: bpy.props.StringProperty(
+        name="Name",
+        default="Combined",
+        options={'SKIP_SAVE'},
+    )
+
+    def validate_active_object(self, active_object):
+        if active_object is None or active_object.type != 'MESH':
+            self.report({'ERROR'}, "Select a mesh object.")
+            return False
+
+        if active_object.mode != 'OBJECT':
+            self.report({'ERROR'}, "Switch to Object Mode.")
+            return False
+
+        return True
+
+    def prepare_from_selection(self, context):
+        selected_items = get_selected_blendshape_items(context.scene)
+
+        if len(selected_items) > 1:
+            self.report({'ERROR'}, "Select only one Blendshape for Combine.")
+            return False
+
+        if not selected_items:
+            self.combine_mode = "NEW"
+            self.target_preset_index = -1
+            self.target_blendshape_name = ""
+            return True
+
+        preset_index, blendshape_name = selected_items[0]
+        self.combine_mode = "TARGET"
+        self.target_preset_index = preset_index
+        self.target_blendshape_name = blendshape_name
+        return True
+
+    def invoke(self, context, event):
+        active_object = context.object
+
+        if not self.validate_active_object(active_object):
+            return {'CANCELLED'}
+
+        if not self.prepare_from_selection(context):
+            return {'CANCELLED'}
+
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+
+        if self.combine_mode == "TARGET":
+            layout.label(text="Are you sure you want to apply Combine to:")
+            layout.label(text=self.target_blendshape_name, icon='SHAPEKEY_DATA')
+            return
+
+        layout.prop(self, "new_blendshape_name")
+
+    def execute(self, context):
+        active_object = context.object
+
+        if not self.validate_active_object(active_object):
+            return {'CANCELLED'}
+
+        if not self.combine_mode:
+            if not self.prepare_from_selection(context):
+                return {'CANCELLED'}
+
+        if self.combine_mode == "NEW":
+            blendshape_name = self.new_blendshape_name.strip()
+
+            if not blendshape_name:
+                self.report({'ERROR'}, "Enter a Blendshape name.")
+                return {'CANCELLED'}
+
+            final_name = derived.create_new_combined_blendshape(
+                active_object,
+                blendshape_name,
+            )
+            self.report({'INFO'}, f"Created {final_name}.")
+            return {'FINISHED'}
+
+        if self.target_preset_index < 0:
+            self.report({'ERROR'}, "Select a target Blendshape.")
+            return {'CANCELLED'}
+
+        preset = presets.BLENDSHAPE_PRESETS[self.target_preset_index]
+        applied = derived.apply_combined_blendshape_to_target(
+            active_object,
+            preset,
+            self.target_blendshape_name,
+        )
+
+        if not applied:
+            self.report({'ERROR'}, "Could not apply Combine Blendshape.")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Applied Combine to {self.target_blendshape_name}.")
+        return {'FINISHED'}
+
+
+class NYANWTOOLS_OT_ClearBlendshapeSelection(bpy.types.Operator):
+    bl_idname = "nyanwtools.clear_blendshape_selection"
     bl_label = "Clear Selection"
-    bl_description = "Clear selected Blendshapes in NYANWTOOL"
+    bl_description = "Clear selected Blendshapes in NYANWTOOLS"
     bl_options = {'INTERNAL'}
 
     def execute(self, context):
@@ -262,16 +380,28 @@ class NYANWTOOL_OT_ClearBlendshapeSelection(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOL_OT_ToggleFamilySelection(bpy.types.Operator):
-    bl_idname = "nyanwtool.toggle_family_selection"
+class NYANWTOOLS_OT_ToggleFamilySelection(bpy.types.Operator):
+    bl_idname = "nyanwtools.toggle_family_selection"
     bl_label = "Toggle Blendshape Family"
     bl_description = "Select or deselect this Blendshape family"
     bl_options = {'INTERNAL'}
 
     preset_index: bpy.props.IntProperty()
+    add_to_selection: bpy.props.BoolProperty(default=False, options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        self.add_to_selection = event.ctrl
+        return self.execute(context)
 
     def execute(self, context):
         property_name = get_family_selected_property_name(self.preset_index)
+
+        if not self.add_to_selection:
+            clear_blendshape_selection(context.scene)
+            setattr(context.scene, property_name, True)
+            set_family_blendshapes_selected(context.scene, self.preset_index, True)
+            return {'FINISHED'}
+
         current_value = getattr(context.scene, property_name)
         new_value = not current_value
 
@@ -281,14 +411,19 @@ class NYANWTOOL_OT_ToggleFamilySelection(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class NYANWTOOL_OT_ToggleBlendshapeSelection(bpy.types.Operator):
-    bl_idname = "nyanwtool.toggle_blendshape_selection"
+class NYANWTOOLS_OT_ToggleBlendshapeSelection(bpy.types.Operator):
+    bl_idname = "nyanwtools.toggle_blendshape_selection"
     bl_label = "Toggle Blendshape"
     bl_description = "Select or deselect this Blendshape"
     bl_options = {'INTERNAL'}
 
     preset_index: bpy.props.IntProperty()
     blendshape_index: bpy.props.IntProperty()
+    add_to_selection: bpy.props.BoolProperty(default=False, options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        self.add_to_selection = event.ctrl
+        return self.execute(context)
 
     def execute(self, context):
         property_name = get_blendshape_selected_property_name(
@@ -297,6 +432,17 @@ class NYANWTOOL_OT_ToggleBlendshapeSelection(bpy.types.Operator):
         )
         current_value = getattr(context.scene, property_name)
 
+        if not self.add_to_selection:
+            if current_value:
+                setattr(context.scene, property_name, False)
+                update_family_selection(context.scene, self.preset_index)
+                return {'FINISHED'}
+
+            clear_blendshape_selection(context.scene)
+            setattr(context.scene, property_name, True)
+            update_family_selection(context.scene, self.preset_index)
+            return {'FINISHED'}
+
         setattr(context.scene, property_name, not current_value)
         update_family_selection(context.scene, self.preset_index)
 
@@ -304,11 +450,12 @@ class NYANWTOOL_OT_ToggleBlendshapeSelection(bpy.types.Operator):
 
 
 classes = (
-    NYANWTOOL_OT_CreateBlendshapes,
-    NYANWTOOL_OT_FlipSelectedBlendshape,
-    NYANWTOOL_OT_ClearBlendshapeSelection,
-    NYANWTOOL_OT_ToggleFamilySelection,
-    NYANWTOOL_OT_ToggleBlendshapeSelection,
+    NYANWTOOLS_OT_CreateBlendshapes,
+    NYANWTOOLS_OT_FlipSelectedBlendshape,
+    NYANWTOOLS_OT_CombineBlendshape,
+    NYANWTOOLS_OT_ClearBlendshapeSelection,
+    NYANWTOOLS_OT_ToggleFamilySelection,
+    NYANWTOOLS_OT_ToggleBlendshapeSelection,
 )
 
 
@@ -324,3 +471,4 @@ def unregister():
         bpy.utils.unregister_class(cls)
 
     unregister_scene_properties()
+

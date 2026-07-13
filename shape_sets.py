@@ -1,3 +1,5 @@
+import bpy
+
 from . import presets
 
 STATUS_GREEN = "GREEN"
@@ -135,7 +137,7 @@ def sort_shape_keys(active_object):
         if current_index < 0 or current_index == target_index:
             continue
 
-        move_shape_key_block(shape_key_blocks, current_index, target_index)
+        move_shape_key_to_index(active_object, shape_key_name, target_index)
 
     set_active_shape_key(active_object, original_active_shape_key)
 
@@ -162,23 +164,67 @@ def get_empty_separator_name(active_object):
     return empty_separator_name
 
 
-def move_shape_key_block(shape_key_blocks, current_index, target_index):
-    if not hasattr(shape_key_blocks, "move"):
+def move_shape_key_one_step(active_object, shape_key_name, move_type):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
         return False
 
-    try:
-        shape_key_blocks.move(current_index, target_index)
-    except AttributeError:
+    shape_key_index = shape_key_blocks.find(shape_key_name)
+
+    if shape_key_index < 0:
         return False
+
+    active_object.active_shape_key_index = shape_key_index
+    original_active_object = bpy.context.view_layer.objects.active
+
+    try:
+        bpy.context.view_layer.objects.active = active_object
+
+        with bpy.context.temp_override(
+            object=active_object,
+            active_object=active_object,
+            selected_objects=[active_object],
+            selected_editable_objects=[active_object],
+        ):
+            result = bpy.ops.object.shape_key_move(type=move_type)
+    finally:
+        bpy.context.view_layer.objects.active = original_active_object
+
+    return result == {'FINISHED'}
+
+
+def move_shape_key_to_index(active_object, shape_key_name, target_index):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return False
+
+    current_index = shape_key_blocks.find(shape_key_name)
+
+    if current_index < 0 or target_index < 0:
+        return False
+
+    while current_index > target_index:
+        if not move_shape_key_one_step(active_object, shape_key_name, 'UP'):
+            return False
+
+        current_index = shape_key_blocks.find(shape_key_name)
+
+    while current_index < target_index:
+        if not move_shape_key_one_step(active_object, shape_key_name, 'DOWN'):
+            return False
+
+        current_index = shape_key_blocks.find(shape_key_name)
 
     return True
 
 
-def move_shape_key_after(active_object, shape_key_name, anchor_name):
+def move_shape_key_just_after(active_object, shape_key_name, anchor_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
 
     if shape_key_blocks is None:
-        return
+        return False
 
     original_active_name = get_active_shape_key_name(active_object)
 
@@ -186,7 +232,40 @@ def move_shape_key_after(active_object, shape_key_name, anchor_name):
         current_index = shape_key_blocks.find(shape_key_name)
 
         if current_index < 0:
-            return
+            return False
+
+        if anchor_name is None:
+            return move_shape_key_to_index(active_object, shape_key_name, 1)
+
+        while current_index > 1:
+            previous_name = shape_key_blocks[current_index - 1].name
+
+            if previous_name == anchor_name:
+                return True
+
+            if not move_shape_key_one_step(active_object, shape_key_name, 'UP'):
+                return False
+
+            current_index = shape_key_blocks.find(shape_key_name)
+
+        return False
+    finally:
+        set_active_shape_key(active_object, original_active_name)
+
+
+def move_shape_key_after(active_object, shape_key_name, anchor_name):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return False
+
+    original_active_name = get_active_shape_key_name(active_object)
+
+    try:
+        current_index = shape_key_blocks.find(shape_key_name)
+
+        if current_index < 0:
+            return False
 
         if anchor_name is None:
             target_index = 1
@@ -198,11 +277,7 @@ def move_shape_key_after(active_object, shape_key_name, anchor_name):
             else:
                 target_index = anchor_index + 1
 
-        if current_index == target_index:
-            return
-
-        if move_shape_key_block(shape_key_blocks, current_index, target_index):
-            return
+        return move_shape_key_to_index(active_object, shape_key_name, target_index)
     finally:
         set_active_shape_key(active_object, original_active_name)
 
@@ -266,7 +341,7 @@ def create_blendshape(active_object, blendshape_name, insert_after_name=None):
 
     shape_key = active_object.shape_key_add(name=blendshape_name, from_mix=False)
     shape_key.value = 0.0
-    move_shape_key_after(active_object, blendshape_name, insert_after_name)
+    move_shape_key_just_after(active_object, blendshape_name, insert_after_name)
     set_active_shape_key(active_object, original_active_name)
 
     return True

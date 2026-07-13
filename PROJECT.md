@@ -1,4 +1,4 @@
-# NyanwTool 
+# NyanwTools 
 
 This document has higher priority than AI assumptions.
 
@@ -6,7 +6,7 @@ When there is a conflict between your own design ideas and this document, always
 
 ## Overview
 
-NyanwTool is a Blender 5.0.0 addon created specifically to speed up the creation of VTuber blendshapes.
+NyanwTools is a Blender 5.0.0 addon created specifically to speed up the creation of VTuber blendshapes.
 
 The addon is intended for a production workflow where many avatars are created repeatedly. Every feature should remove repetitive manual work rather than introduce new workflows.
 
@@ -48,7 +48,7 @@ Compatibility with older versions is not required.
 
 # Addon Name
 
-NyanwTool
+NyanwTools
 
 Author:
 
@@ -259,7 +259,7 @@ The addon uses Blender's sidebar.
 
 Category:
 
-NyanwTool
+NyanwTools
 
 Sections:
 

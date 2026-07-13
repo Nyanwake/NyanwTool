@@ -1,10 +1,10 @@
 bl_info = {
-    "name": "NyanwTool",
-    "author": "NyanWake ",
+    "name": "NyanwTools",
+    "author": "NyanWake",
     "version": (0, 1, 0),
     "blender": (5, 0, 0),
-    "location": "View3D > Sidebar > NyanwTool",
-    "description": "Workflow tools for creating ARkit blendshapes",
+    "location": "View3D > Sidebar > NyanwTools",
+    "description": "Workflow tools for creating ARKit blendshapes",
     "category": "3D View",
 }
 
@@ -13,10 +13,12 @@ import bpy
 if "operators" in locals():
     import importlib
 
+    from . import derived
     from . import mirror
     from . import presets
     from . import shape_sets
 
+    importlib.reload(derived)
     importlib.reload(mirror)
     importlib.reload(presets)
     importlib.reload(shape_sets)
