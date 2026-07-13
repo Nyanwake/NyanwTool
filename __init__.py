@@ -1,7 +1,7 @@
 bl_info = {
     "name": "NyanwTools",
     "author": "NyanWake",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (5, 0, 0),
     "location": "View3D > Sidebar > NyanwTools",
     "description": "Workflow tools for creating ARKit blendshapes",
