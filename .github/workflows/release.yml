@@ -1,0 +1,45 @@
+name: Build Blender Addon
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Create addon folder
+        run: |
+          mkdir NyanwTool
+
+          cp __init__.py NyanwTool/
+          cp operators.py NyanwTool/
+          cp ui.py NyanwTool/
+          cp mirror.py NyanwTool/
+          cp derived.py NyanwTool/
+          cp shape_sets.py NyanwTool/
+          cp presets.py NyanwTool/
+
+          cp -r icons NyanwTool/
+
+          if [ -f LICENSE ]; then
+            cp LICENSE NyanwTool/
+          fi
+
+      - name: Create ZIP
+        run: |
+          zip -r NyanwTool-${{ github.ref_name }}.zip NyanwTool
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            NyanwTool-${{ github.ref_name }}.zip

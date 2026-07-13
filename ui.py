@@ -79,15 +79,6 @@ def draw_panel_header(layout):
     else:
         layout.label(text="NyanWake's Blendshape Tool", icon='TOOL_SETTINGS')
 
-def draw_status_label(layout, status, text):
-    icon_id = get_status_icon_id(status)
-    
-    if icon_id:
-        layout.label(text=text, icon_value=icon_id)
-        return
-    
-    layout.label(text=text, icon=FALLBACK_STATUS_ICONS[status])
-
 def draw_status_operator(layout, operator_idname, status, text, is_selected):
     icon_id = get_status_icon_id(status)
     
