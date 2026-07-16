@@ -10,6 +10,8 @@ NyanwTool automates those repetitive steps, letting you spend more time creating
 
 ---
 
+![Nyanwtool](.github/Preview.png)
+
 ## Requirements
 
 - Blender 5.0+ (Maybe on 4.2+)
