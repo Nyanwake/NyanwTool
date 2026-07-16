@@ -1,120 +1,101 @@
 # NyanwTool
 
-NyanwTool is a Blender addon that simplifies creating, organizing and managing Blendshapes for VTuber avatars.
+**Save time while creating Blendshapes for VTuber/VRchat avatars in Blender.**
 
-I originally created this addon for my own workflow. As a VTuber avatar creator, I frequently build facial expressions for ARKit, VRChat and MMD, and wanted a faster way to create, organize and manage Shape Keys without constantly rearranging them by hand.
+NyanwTool is a Blender addon designed to automate repetitive Shape Key setup for ARKit, VRChat, VRM and MMD workflows.
 
-If you work with facial Blendshapes on a regular basis, I hope this tool saves you as much time as it saves me.
+I originally created this addon for my own workflow. As a VTuber avatar creator, I constantly found myself creating the same Blendshape sets, organizing them into the correct order and repeating the same tasks on every new avatar.
+
+NyanwTool automates those repetitive steps, letting you spend more time creating expressions instead of managing Shape Keys.
+
+---
 
 ## Requirements
 
-- Blender 5.0+
+- Blender 5.0+ (Maybe on 4.2+)
 
-## Features
+---
 
-### Blendshape Presets
+## Workflow
+
+NyanwTool follows Blender's native Shape Key workflow.
+
+- Use **NyanwTool** side panel to generate missing Blendshapes from supported preset collections.
+- Continue editing directly inside Blender's standard **Shape Keys** panel using the integrated **Flip** and **Combine** buttons.
+
+This keeps Blender's default workflow intact while dramatically reducing repetitive setup work.
+
+---
+
+# Features
+
+## Blendshape Presets
 
 Built-in preset collections:
 
 - Apple ARKit
 - NyanWake Eyes
 - VRChat Visemes
+- VRM 1.0 Expressions
+- VRCFaceTracking Unified Expressions
 - MMD English
 - MMD Japanese
 
-*You can add them in the file. presets.py*
+*Additional preset collections can easily be created by editing `presets.py`.*
 
-Each preset displays its completion status:
+Each preset displays its current completion status:
 
 🟢 Complete
 
-🟡 Partially complete
+🟡 Partially Complete
 
 🔴 Missing
 
 ---
 
-### Selection
-
-- Click to select a single Blendshape.
-- Click the selected Blendshape again to clear the selection.
-- **Ctrl + Click** to select multiple Blendshapes.
-- Click a preset header to select or deselect the entire family.
-
----
-
-### Create Blendshapes
+## Create Missing Blendshapes
 
 Creates only the missing Blendshapes from the current selection.
 
 Existing Shape Keys are never duplicated.
 
-New Blendshapes are automatically sorted into the correct order defined by the preset, while custom user Shape Keys remain below them.
+New Blendshapes are automatically sorted into the correct order defined by the preset while custom user Shape Keys remain below them.
+
+This allows partially completed Blendshape sets to be safely completed without affecting existing work.
 
 ---
 
-### Flip Blendshape
+## Flip Blendshape
 
-Mirrors the selected Blendshape to its opposite side.
+Located directly inside Blender's **Shape Keys** panel.
 
-Supported naming conventions include:
+If you've created **eyeBlinkLeft** and want an identical **eyeBlinkRight**, simply press **Flip Blendshape**.
+
+The addon automatically finds the matching Shape Key using common naming conventions:
 
 - Left / Right
 - _L / _R
 - .L / .R
 
-The opposite Shape Key is created automatically if it does not already exist.
-
-**Known limitation**
-
-Flip changes the active Shape Key position in Blender's Shape Key list.
-
-This does not affect the addon itself and is planned to be fixed in a future update.
-
-To avoid this behavior, select the **Basis** Shape Key before using **Flip**.
+It then mirrors the deformation onto the matching Shape Key, or creates it automatically if it doesn't exist yet.
 
 ---
 
-### Combine Blendshape
+## Combine Blendshape
 
-Creates a new Shape Key from the current deformation mix.
+Located directly inside Blender's **Shape Keys** panel.
 
-Behavior depends on the current selection:
+Create a new Shape Key from the current facial expression in a single click.
 
-- **No Blendshape selected**
-  - Creates a new Blendshape and asks for its name.
+If **Basis** is selected, Combine creates a new Shape Key and asks for its name.
 
-- **One Blendshape selected**
-  - Asks for confirmation before replacing the selected Blendshape with the current deformation mix.
+If another Shape Key is selected, Combine lets you quickly replace it with the current facial expression after confirmation.
 
-- **Multiple Blendshapes selected**
-  - Operation is cancelled to prevent accidental replacement.
-
-This workflow is useful for creating expressions such as MMD Shape Keys from existing ARKit expressions.
+This is especially useful when creating new expressions from existing Blendshape combinations without manually recreating them.
 
 ---
 
-## Current Version
-
-**v1.1.0**
-
-### Included
-
-- Preset-based Blendshape management
-- Status indicators
-- Multi-selection
-- Automatic Blendshape creation
-- Automatic Shape Key sorting
-- Blendshape mirroring
-- Combine Blendshape workflow
-- Custom icons
-- VRM 1.0 Expressions preset
-- VRCFaceTracking Unified Expressions preset
-- Native Shape Keys Flip and Combine workflow
-
----
-
-## Installation
+# Installation
 
 1. Download the latest release.
 2. Open **Edit → Preferences → Add-ons**.
@@ -124,6 +105,38 @@ This workflow is useful for creating expressions such as MMD Shape Keys from exi
 
 ---
 
-## License
+# FAQ
+
+### Flip doesn't mirror correctly
+
+The most common cause is asymmetrical mesh topology.
+
+In **Edit Mode**:
+
+1. Select all vertices (**A**).
+2. Go to **Mesh → Snap → Snap to Symmetry**.
+3. Try using **Flip** again.
+
+This usually fixes meshes whose left and right vertices are no longer perfectly symmetrical.
+
+---
+
+### Can I add my own preset collections?
+
+Yes.
+
+Simply edit `presets.py` and define your own Blendshape families.
+
+---
+
+### Does Flip only work with preset Blendshapes?
+
+No.
+
+Flip and Combine work with **any Shape Key**, even if it is not part of any preset collection.
+
+---
+
+# License
 
 MIT License
