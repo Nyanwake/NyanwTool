@@ -65,6 +65,90 @@ def set_active_shape_key(active_object, shape_key_name):
     active_object.active_shape_key_index = shape_key_blocks.find(shape_key_name)
 
 
+def shape_key_supports_selection(shape_key):
+    return hasattr(shape_key, "select")
+
+
+def get_shape_key_selection_values(active_object):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return {}
+
+    selection_values = {}
+
+    for shape_key in shape_key_blocks:
+        if shape_key_supports_selection(shape_key):
+            selection_values[shape_key.name] = shape_key.select
+
+    return selection_values
+
+
+def restore_shape_key_selection(active_object, selection_values):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return
+
+    for shape_key in shape_key_blocks:
+        if shape_key_supports_selection(shape_key):
+            shape_key.select = selection_values.get(shape_key.name, False)
+
+
+def set_shape_key_selected(active_object, shape_key_name, is_selected):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return
+
+    if shape_key_name not in shape_key_blocks:
+        return
+
+    shape_key = shape_key_blocks[shape_key_name]
+
+    if shape_key_supports_selection(shape_key):
+        shape_key.select = is_selected
+
+
+def select_only_shape_key(active_object, shape_key_name):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return
+
+    for shape_key in shape_key_blocks:
+        if shape_key_supports_selection(shape_key):
+            shape_key.select = shape_key.name == shape_key_name
+
+
+def select_shape_keys(active_object, shape_key_names):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return
+
+    selected_names = set(shape_key_names)
+
+    for shape_key in shape_key_blocks:
+        if shape_key_supports_selection(shape_key):
+            shape_key.select = shape_key.name in selected_names
+
+
+def get_selected_shape_key_names(active_object):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return []
+
+    selected_names = []
+
+    for shape_key in shape_key_blocks:
+        if shape_key_supports_selection(shape_key) and shape_key.select:
+            selected_names.append(shape_key.name)
+
+    return selected_names
+
+
 def blendshape_exists(active_object, blendshape_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
 
@@ -177,8 +261,10 @@ def move_shape_key_one_step(active_object, shape_key_name, move_type):
 
     active_object.active_shape_key_index = shape_key_index
     original_active_object = bpy.context.view_layer.objects.active
+    original_selection_values = get_shape_key_selection_values(active_object)
 
     try:
+        select_only_shape_key(active_object, shape_key_name)
         bpy.context.view_layer.objects.active = active_object
 
         with bpy.context.temp_override(
@@ -189,6 +275,7 @@ def move_shape_key_one_step(active_object, shape_key_name, move_type):
         ):
             result = bpy.ops.object.shape_key_move(type=move_type)
     finally:
+        restore_shape_key_selection(active_object, original_selection_values)
         bpy.context.view_layer.objects.active = original_active_object
 
     return result == {'FINISHED'}

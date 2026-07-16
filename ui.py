@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 import bpy
 import bpy.utils.previews
@@ -191,10 +191,58 @@ class NYANWTOOLS_PT_MainPanel(bpy.types.Panel):
                 preset,
             )
 
-        box.operator("nyanwtools.create_blendshapes", icon='ADD')
-        box.operator("nyanwtools.flip_selected_blendshape", text="Flip Blendshape", icon='MOD_MIRROR')
-        box.operator("nyanwtools.combine_blendshape", text="Combine Blendshape", icon='SHAPEKEY_DATA')
-        box.operator("nyanwtools.clear_blendshape_selection", icon='CANCEL')
+        create_row = box.row()
+        create_row.scale_y = 1.5
+        create_row.operator("nyanwtools.create_blendshapes", icon='ADD')
+
+
+
+def draw_native_shape_keys_buttons(self, context):
+    active_object = context.object
+
+    if active_object is None or active_object.type != 'MESH':
+        return
+
+    layout = self.layout
+    layout.separator()
+
+    row = layout.row(align=True)
+    row.operator(
+        "nyanwtools.flip_selected_blendshape",
+        text="Flip Blendshape",
+        icon='MOD_MIRROR',
+    )
+    row.operator(
+        "nyanwtools.combine_blendshape",
+        text="Combine Blendshape",
+        icon='SHAPEKEY_DATA',
+    )
+
+
+def register_native_shape_keys_buttons():
+    shape_keys_panel = getattr(bpy.types, "DATA_PT_shape_keys", None)
+
+    if shape_keys_panel is None:
+        return
+
+    try:
+        shape_keys_panel.remove(draw_native_shape_keys_buttons)
+    except (AttributeError, ValueError):
+        pass
+
+    shape_keys_panel.prepend(draw_native_shape_keys_buttons)
+
+
+def unregister_native_shape_keys_buttons():
+    shape_keys_panel = getattr(bpy.types, "DATA_PT_shape_keys", None)
+
+    if shape_keys_panel is None:
+        return
+
+    try:
+        shape_keys_panel.remove(draw_native_shape_keys_buttons)
+    except (AttributeError, ValueError):
+        pass
 
 classes = (
     NYANWTOOLS_PT_MainPanel,
@@ -206,7 +254,10 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
+    register_native_shape_keys_buttons()
+
 def unregister():
+    unregister_native_shape_keys_buttons()
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

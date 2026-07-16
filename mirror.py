@@ -30,24 +30,7 @@ def get_opposite_blendshape_name(blendshape_name):
 
 
 def get_shape_key_blocks(active_object):
-    shape_keys = getattr(active_object.data, "shape_keys", None)
-
-    if shape_keys is None:
-        return None
-
-    return shape_keys.key_blocks
-
-
-def get_active_blendshape(active_object):
-    active_shape_key = active_object.active_shape_key
-
-    if active_shape_key is None:
-        return None
-
-    if active_shape_key.name == "Basis":
-        return None
-
-    return active_shape_key
+    return shape_sets.get_shape_key_blocks(active_object)
 
 
 def get_blendshape_values(shape_key_blocks):
@@ -90,97 +73,123 @@ def get_unique_temp_blendshape_name(active_object):
     return temp_name
 
 
-def create_shape_key_from_source(active_object, source_name, new_shape_key_name, insert_after_name=None):
+def create_shape_key_from_source(active_object, source_name, new_shape_key_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
     original_values = get_blendshape_values(shape_key_blocks)
 
     try:
-        shape_key_blocks = get_shape_key_blocks(active_object)
         clear_blendshape_values(shape_key_blocks)
         shape_key_blocks[source_name].value = 1.0
-
-        if insert_after_name and insert_after_name in shape_key_blocks:
-            shape_sets.set_active_shape_key(active_object, insert_after_name)
 
         new_shape_key = active_object.shape_key_add(
             name=new_shape_key_name,
             from_mix=True,
         )
         new_shape_key.value = 0.0
-        shape_key_blocks = get_shape_key_blocks(active_object)
-        shape_sets.move_shape_key_after(
-            active_object,
-            new_shape_key_name,
-            insert_after_name,
-        )
-        active_object.active_shape_key_index = shape_key_blocks.find(new_shape_key_name)
         return new_shape_key
     finally:
         shape_key_blocks = get_shape_key_blocks(active_object)
         restore_blendshape_values(shape_key_blocks, original_values)
 
 
-def remove_temp_blendshape(active_object, temp_shape_key_name):
+def remove_shape_key(active_object, shape_key_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
 
     if shape_key_blocks is None:
         return
 
-    if temp_shape_key_name not in shape_key_blocks:
+    if shape_key_name not in shape_key_blocks:
         return
 
-    active_object.active_shape_key_index = shape_key_blocks.find(temp_shape_key_name)
+    active_object.active_shape_key_index = shape_key_blocks.find(shape_key_name)
     active_object.shape_key_remove(active_object.active_shape_key)
 
 
-def create_mirrored_blendshape(active_object, source_name, destination_name):
+def mirror_shape_key(active_object, shape_key_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
-    original_active_name = active_object.active_shape_key.name
-    original_values = get_blendshape_values(shape_key_blocks)
+
+    if shape_key_blocks is None or shape_key_name not in shape_key_blocks:
+        return False
+
     original_active_object = bpy.context.view_layer.objects.active
+    original_selection_values = shape_sets.get_shape_key_selection_values(active_object)
 
     try:
-        if destination_name in shape_key_blocks:
-            temp_name = get_unique_temp_blendshape_name(active_object)
-            temp_shape_key = create_shape_key_from_source(
-                active_object,
-                source_name,
-                temp_name,
-                insert_after_name=source_name,
-            )
-
-            shape_key_blocks = get_shape_key_blocks(active_object)
-            copy_shape_key_coordinates(
-                temp_shape_key,
-                shape_key_blocks[destination_name],
-            )
-            remove_temp_blendshape(active_object, temp_name)
-        else:
-            create_shape_key_from_source(
-                active_object,
-                source_name,
-                destination_name,
-                insert_after_name=source_name,
-            )
-
-        shape_key_blocks = get_shape_key_blocks(active_object)
-        active_object.active_shape_key_index = shape_key_blocks.find(destination_name)
+        shape_sets.select_only_shape_key(active_object, shape_key_name)
+        active_object.active_shape_key_index = shape_key_blocks.find(shape_key_name)
         bpy.context.view_layer.objects.active = active_object
 
         with bpy.context.temp_override(
             object=active_object,
             active_object=active_object,
+            selected_objects=[active_object],
+            selected_editable_objects=[active_object],
         ):
-            bpy.ops.object.shape_key_mirror(use_topology=False)
+            result = bpy.ops.object.shape_key_mirror(use_topology=False)
     finally:
+        shape_sets.restore_shape_key_selection(active_object, original_selection_values)
         bpy.context.view_layer.objects.active = original_active_object
+
+    return result == {'FINISHED'}
+
+
+def ensure_destination_blendshape(active_object, source_name, destination_name):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return None
+
+    if destination_name not in shape_key_blocks:
+        shape_sets.create_blendshape(
+            active_object,
+            destination_name,
+            insert_after_name=source_name,
+        )
+
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if destination_name not in shape_key_blocks:
+        return None
+
+    return shape_key_blocks[destination_name]
+
+
+def create_mirrored_blendshape(active_object, source_name, destination_name):
+    shape_key_blocks = get_shape_key_blocks(active_object)
+
+    if shape_key_blocks is None:
+        return False
+
+    original_active_name = shape_sets.get_active_shape_key_name(active_object)
+    original_values = get_blendshape_values(shape_key_blocks)
+    temp_name = get_unique_temp_blendshape_name(active_object)
+    temp_shape_key = create_shape_key_from_source(
+        active_object,
+        source_name,
+        temp_name,
+    )
+
+    try:
+        if not mirror_shape_key(active_object, temp_name):
+            return False
+
+        destination_shape_key = ensure_destination_blendshape(
+            active_object,
+            source_name,
+            destination_name,
+        )
+
+        if destination_shape_key is None:
+            return False
+
+        copy_shape_key_coordinates(temp_shape_key, destination_shape_key)
+        destination_shape_key.value = 0.0
+        return True
+    finally:
+        remove_shape_key(active_object, temp_name)
         shape_key_blocks = get_shape_key_blocks(active_object)
         restore_blendshape_values(shape_key_blocks, original_values)
-
-        if original_active_name in shape_key_blocks:
-            active_object.active_shape_key_index = shape_key_blocks.find(
-                original_active_name,
-            )
+        shape_sets.set_active_shape_key(active_object, original_active_name)
 
 
 def create_mirrored_blendshapes(active_object, source_names):
@@ -215,12 +224,15 @@ def create_mirrored_blendshapes(active_object, source_names):
             skipped_count += 2
             continue
 
-        create_mirrored_blendshape(
+        if create_mirrored_blendshape(
             active_object,
             source_name,
             destination_name,
-        )
+        ):
+            mirrored_count += 1
+        else:
+            skipped_count += 1
+
         processed_pairs.add(pair_key)
-        mirrored_count += 1
 
     return mirrored_count, skipped_count

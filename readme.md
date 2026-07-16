@@ -96,7 +96,7 @@ This workflow is useful for creating expressions such as MMD Shape Keys from exi
 
 ## Current Version
 
-**v1.0.0**
+**v1.1.0**
 
 ### Included
 
@@ -108,6 +108,9 @@ This workflow is useful for creating expressions such as MMD Shape Keys from exi
 - Blendshape mirroring
 - Combine Blendshape workflow
 - Custom icons
+- VRM 1.0 Expressions preset
+- VRCFaceTracking Unified Expressions preset
+- Native Shape Keys Flip and Combine workflow
 
 ---
 

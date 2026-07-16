@@ -1,4 +1,4 @@
-﻿import bpy
+import bpy
 
 from . import derived
 from . import mirror
@@ -9,6 +9,147 @@ from . import shape_sets
 FAMILY_SELECTED_PROPERTY_PREFIX = "NYANWTOOLS_family_selected_"
 FAMILY_EXPANDED_PROPERTY_PREFIX = "NYANWTOOLS_family_expanded_"
 BLENDSHAPE_SELECTED_PROPERTY_PREFIX = "NYANWTOOLS_blendshape_selected_"
+
+
+_last_synced_shape_key = None
+_is_syncing_shape_key_selection = False
+_is_shape_key_selection_sync_suspended = False
+
+
+def get_active_shape_key_sync_key(active_object):
+    if active_object is None or active_object.type != 'MESH':
+        return None
+
+    selected_names = tuple(shape_sets.get_selected_shape_key_names(active_object))
+    active_name = shape_sets.get_active_shape_key_name(active_object)
+
+    return (active_object.name, active_name, selected_names)
+
+
+def remember_active_shape_key(active_object):
+    global _last_synced_shape_key
+
+    _last_synced_shape_key = get_active_shape_key_sync_key(active_object)
+
+
+def set_shape_key_selection_sync_suspended(is_suspended):
+    global _is_shape_key_selection_sync_suspended
+
+    _is_shape_key_selection_sync_suspended = is_suspended
+
+
+def find_preset_blendshape(blendshape_name):
+    for preset_index, preset in enumerate(presets.BLENDSHAPE_PRESETS):
+        for blendshape_index, current_name in enumerate(preset["blendshapes"]):
+            if current_name == blendshape_name:
+                return preset_index, blendshape_index
+
+    return None
+
+
+def select_only_addon_blendshape(scene, preset_index, blendshape_index):
+    clear_blendshape_selection(scene)
+
+    property_name = get_blendshape_selected_property_name(
+        preset_index,
+        blendshape_index,
+    )
+    setattr(scene, property_name, True)
+    update_family_selection(scene, preset_index)
+
+
+def set_addon_blendshape_selected(scene, blendshape_name):
+    selection_indices = find_preset_blendshape(blendshape_name)
+
+    if selection_indices is None:
+        return False
+
+    preset_index, blendshape_index = selection_indices
+    property_name = get_blendshape_selected_property_name(
+        preset_index,
+        blendshape_index,
+    )
+    setattr(scene, property_name, True)
+    update_family_selection(scene, preset_index)
+
+    return True
+
+
+def sync_addon_selection_to_active_shape_key(scene, active_object, force=False):
+    global _is_syncing_shape_key_selection
+    global _last_synced_shape_key
+
+    if _is_shape_key_selection_sync_suspended:
+        return
+
+    if _is_syncing_shape_key_selection:
+        return
+
+    sync_key = get_active_shape_key_sync_key(active_object)
+
+    if not force and sync_key == _last_synced_shape_key:
+        return
+
+    _last_synced_shape_key = sync_key
+    _is_syncing_shape_key_selection = True
+
+    try:
+        active_shape_key_name = None
+        selected_shape_key_names = []
+
+        if sync_key is not None:
+            _object_name, active_shape_key_name, selected_shape_key_names = sync_key
+
+        if selected_shape_key_names:
+            clear_blendshape_selection(scene)
+            selected_any = False
+
+            for shape_key_name in selected_shape_key_names:
+                if shape_key_name == "Basis":
+                    continue
+
+                if set_addon_blendshape_selected(scene, shape_key_name):
+                    selected_any = True
+
+            if not selected_any:
+                clear_blendshape_selection(scene)
+
+            return
+
+        if not active_shape_key_name or active_shape_key_name == "Basis":
+            clear_blendshape_selection(scene)
+            return
+
+        selection_indices = find_preset_blendshape(active_shape_key_name)
+
+        if selection_indices is None:
+            clear_blendshape_selection(scene)
+            return
+
+        preset_index, blendshape_index = selection_indices
+        select_only_addon_blendshape(scene, preset_index, blendshape_index)
+    finally:
+        _is_syncing_shape_key_selection = False
+
+
+def sync_addon_selection_to_active_shape_key_handler(scene, depsgraph):
+    active_object = bpy.context.view_layer.objects.active
+
+    sync_addon_selection_to_active_shape_key(scene, active_object)
+
+
+def register_shape_key_selection_sync():
+    handlers = bpy.app.handlers.depsgraph_update_post
+
+    if sync_addon_selection_to_active_shape_key_handler not in handlers:
+        handlers.append(sync_addon_selection_to_active_shape_key_handler)
+
+
+def unregister_shape_key_selection_sync():
+    handlers = bpy.app.handlers.depsgraph_update_post
+
+    if sync_addon_selection_to_active_shape_key_handler in handlers:
+        handlers.remove(sync_addon_selection_to_active_shape_key_handler)
 
 
 def get_family_selected_property_name(preset_index):
@@ -116,6 +257,36 @@ def get_selected_blendshape_names(scene):
         selected_names.extend(blendshape_names)
 
     return list(dict.fromkeys(selected_names))
+
+
+def get_selected_blender_shape_key_names(active_object):
+    selected_names = shape_sets.get_selected_shape_key_names(active_object)
+    selected_names = [name for name in selected_names if name and name != "Basis"]
+
+    if selected_names:
+        return list(dict.fromkeys(selected_names))
+
+    active_name = shape_sets.get_active_shape_key_name(active_object)
+
+    if active_name and active_name != "Basis":
+        return [active_name]
+
+    return []
+
+
+def sync_blender_selection_to_addon_selection(scene, active_object, active_blendshape_name=None):
+    if active_object is None or active_object.type != 'MESH':
+        return
+
+    selected_names = get_selected_blendshape_names(scene)
+    shape_sets.select_shape_keys(active_object, selected_names)
+
+    if active_blendshape_name:
+        shape_sets.set_active_shape_key(active_object, active_blendshape_name)
+    elif selected_names:
+        shape_sets.set_active_shape_key(active_object, selected_names[0])
+
+    remember_active_shape_key(active_object)
 
 
 def register_scene_properties():
@@ -234,16 +405,22 @@ class NYANWTOOLS_OT_FlipSelectedBlendshape(bpy.types.Operator):
             self.report({'ERROR'}, "Switch to Object Mode.")
             return {'CANCELLED'}
 
-        selected_blendshape_names = get_selected_blendshape_names(context.scene)
+        selected_blendshape_names = get_selected_blender_shape_key_names(active_object)
 
         if not selected_blendshape_names:
-            self.report({'ERROR'}, "Select at least one Blendshape in NyanwTools.")
+            self.report({'ERROR'}, "Select at least one Shape Key.")
             return {'CANCELLED'}
 
-        mirrored_count, skipped_count = mirror.create_mirrored_blendshapes(
-            active_object,
-            selected_blendshape_names,
-        )
+        set_shape_key_selection_sync_suspended(True)
+
+        try:
+            mirrored_count, skipped_count = mirror.create_mirrored_blendshapes(
+                active_object,
+                selected_blendshape_names,
+            )
+        finally:
+            set_shape_key_selection_sync_suspended(False)
+            remember_active_shape_key(active_object)
 
         if mirrored_count == 0:
             self.report({'INFO'}, "No selected paired Blendshapes to mirror.")
@@ -266,7 +443,6 @@ class NYANWTOOLS_OT_CombineBlendshape(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     combine_mode: bpy.props.StringProperty(default="", options={'SKIP_SAVE'})
-    target_preset_index: bpy.props.IntProperty(default=-1, options={'SKIP_SAVE'})
     target_blendshape_name: bpy.props.StringProperty(default="", options={'SKIP_SAVE'})
     new_blendshape_name: bpy.props.StringProperty(
         name="Name",
@@ -286,22 +462,19 @@ class NYANWTOOLS_OT_CombineBlendshape(bpy.types.Operator):
         return True
 
     def prepare_from_selection(self, context):
-        selected_items = get_selected_blendshape_items(context.scene)
+        selected_names = get_selected_blender_shape_key_names(context.object)
 
-        if len(selected_items) > 1:
-            self.report({'ERROR'}, "Select only one Blendshape for Combine.")
+        if len(selected_names) > 1:
+            self.report({'ERROR'}, "Select only one Shape Key for Combine.")
             return False
 
-        if not selected_items:
+        if not selected_names:
             self.combine_mode = "NEW"
-            self.target_preset_index = -1
             self.target_blendshape_name = ""
             return True
 
-        preset_index, blendshape_name = selected_items[0]
         self.combine_mode = "TARGET"
-        self.target_preset_index = preset_index
-        self.target_blendshape_name = blendshape_name
+        self.target_blendshape_name = selected_names[0]
         return True
 
     def invoke(self, context, event):
@@ -349,14 +522,12 @@ class NYANWTOOLS_OT_CombineBlendshape(bpy.types.Operator):
             self.report({'INFO'}, f"Created {final_name}.")
             return {'FINISHED'}
 
-        if self.target_preset_index < 0:
-            self.report({'ERROR'}, "Select a target Blendshape.")
+        if not self.target_blendshape_name:
+            self.report({'ERROR'}, "Select a target Shape Key.")
             return {'CANCELLED'}
 
-        preset = presets.BLENDSHAPE_PRESETS[self.target_preset_index]
         applied = derived.apply_combined_blendshape_to_target(
             active_object,
-            preset,
             self.target_blendshape_name,
         )
 
@@ -365,18 +536,6 @@ class NYANWTOOLS_OT_CombineBlendshape(bpy.types.Operator):
             return {'CANCELLED'}
 
         self.report({'INFO'}, f"Applied Combine to {self.target_blendshape_name}.")
-        return {'FINISHED'}
-
-
-class NYANWTOOLS_OT_ClearBlendshapeSelection(bpy.types.Operator):
-    bl_idname = "nyanwtools.clear_blendshape_selection"
-    bl_label = "Clear Selection"
-    bl_description = "Clear selected Blendshapes in NYANWTOOLS"
-    bl_options = {'INTERNAL'}
-
-    def execute(self, context):
-        clear_blendshape_selection(context.scene)
-
         return {'FINISHED'}
 
 
@@ -394,19 +553,40 @@ class NYANWTOOLS_OT_ToggleFamilySelection(bpy.types.Operator):
         return self.execute(context)
 
     def execute(self, context):
+        remember_active_shape_key(context.object)
         property_name = get_family_selected_property_name(self.preset_index)
+        current_value = getattr(context.scene, property_name)
 
         if not self.add_to_selection:
+            if current_value:
+                setattr(context.scene, property_name, False)
+                set_family_blendshapes_selected(context.scene, self.preset_index, False)
+                sync_blender_selection_to_addon_selection(context.scene, context.object)
+                return {'FINISHED'}
+
             clear_blendshape_selection(context.scene)
             setattr(context.scene, property_name, True)
             set_family_blendshapes_selected(context.scene, self.preset_index, True)
+            preset = presets.BLENDSHAPE_PRESETS[self.preset_index]
+            active_blendshape_name = preset["blendshapes"][0] if preset["blendshapes"] else None
+            sync_blender_selection_to_addon_selection(
+                context.scene,
+                context.object,
+                active_blendshape_name,
+            )
             return {'FINISHED'}
 
-        current_value = getattr(context.scene, property_name)
         new_value = not current_value
 
         setattr(context.scene, property_name, new_value)
         set_family_blendshapes_selected(context.scene, self.preset_index, new_value)
+        preset = presets.BLENDSHAPE_PRESETS[self.preset_index]
+        active_blendshape_name = preset["blendshapes"][0] if new_value and preset["blendshapes"] else None
+        sync_blender_selection_to_addon_selection(
+            context.scene,
+            context.object,
+            active_blendshape_name,
+        )
 
         return {'FINISHED'}
 
@@ -426,6 +606,7 @@ class NYANWTOOLS_OT_ToggleBlendshapeSelection(bpy.types.Operator):
         return self.execute(context)
 
     def execute(self, context):
+        remember_active_shape_key(context.object)
         property_name = get_blendshape_selected_property_name(
             self.preset_index,
             self.blendshape_index,
@@ -436,15 +617,31 @@ class NYANWTOOLS_OT_ToggleBlendshapeSelection(bpy.types.Operator):
             if current_value:
                 setattr(context.scene, property_name, False)
                 update_family_selection(context.scene, self.preset_index)
+                sync_blender_selection_to_addon_selection(context.scene, context.object)
                 return {'FINISHED'}
 
             clear_blendshape_selection(context.scene)
             setattr(context.scene, property_name, True)
             update_family_selection(context.scene, self.preset_index)
+            preset = presets.BLENDSHAPE_PRESETS[self.preset_index]
+            blendshape_name = preset["blendshapes"][self.blendshape_index]
+            sync_blender_selection_to_addon_selection(
+                context.scene,
+                context.object,
+                blendshape_name,
+            )
             return {'FINISHED'}
 
         setattr(context.scene, property_name, not current_value)
         update_family_selection(context.scene, self.preset_index)
+        preset = presets.BLENDSHAPE_PRESETS[self.preset_index]
+        blendshape_name = preset["blendshapes"][self.blendshape_index]
+        active_blendshape_name = None if current_value else blendshape_name
+        sync_blender_selection_to_addon_selection(
+            context.scene,
+            context.object,
+            active_blendshape_name,
+        )
 
         return {'FINISHED'}
 
@@ -453,7 +650,6 @@ classes = (
     NYANWTOOLS_OT_CreateBlendshapes,
     NYANWTOOLS_OT_FlipSelectedBlendshape,
     NYANWTOOLS_OT_CombineBlendshape,
-    NYANWTOOLS_OT_ClearBlendshapeSelection,
     NYANWTOOLS_OT_ToggleFamilySelection,
     NYANWTOOLS_OT_ToggleBlendshapeSelection,
 )
@@ -461,12 +657,15 @@ classes = (
 
 def register():
     register_scene_properties()
+    register_shape_key_selection_sync()
 
     for cls in classes:
         bpy.utils.register_class(cls)
 
 
 def unregister():
+    unregister_shape_key_selection_sync()
+
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 

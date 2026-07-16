@@ -66,32 +66,23 @@ def create_new_combined_blendshape(active_object, blendshape_name):
     return final_name
 
 
-def ensure_destination_blendshape(active_object, preset, blendshape_name):
+def get_existing_blendshape(active_object, blendshape_name):
     shape_key_blocks = get_shape_key_blocks(active_object)
 
-    if shape_key_blocks is not None and blendshape_name in shape_key_blocks:
-        return shape_key_blocks[blendshape_name]
+    if shape_key_blocks is None:
+        return None
 
-    shape_sets.create_missing_blendshapes(
-        active_object,
-        preset,
-        [blendshape_name],
-    )
-
-    shape_key_blocks = get_shape_key_blocks(active_object)
-
-    if shape_key_blocks is None or blendshape_name not in shape_key_blocks:
+    if blendshape_name not in shape_key_blocks:
         return None
 
     return shape_key_blocks[blendshape_name]
 
 
-def apply_combined_blendshape_to_target(active_object, preset, blendshape_name):
-    destination_shape_key = ensure_destination_blendshape(
-        active_object,
-        preset,
-        blendshape_name,
-    )
+def apply_combined_blendshape_to_target(active_object, blendshape_name):
+    if not blendshape_name or blendshape_name == "Basis":
+        return False
+
+    destination_shape_key = get_existing_blendshape(active_object, blendshape_name)
 
     if destination_shape_key is None:
         return False
