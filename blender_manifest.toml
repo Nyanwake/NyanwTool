@@ -4,6 +4,17 @@ version = "1.1.0"
 name = "NyanwTool"
 tagline = "Workflow tools for creating ARkit and more blendshapes"
 maintainer = "Nyanwake <nyanwake@gmail.com>"
-type = "add-on"
+website = "https://github.com/Nyanwake/NyanwTool"
+tags = ["Animation", "Modeling"]
+
 blender_version_min = "5.0.0"
+
 license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+    "__pycache__/",
+    "*.pyc",
+    ".git/",
+    ".github/",
+    ".*",
