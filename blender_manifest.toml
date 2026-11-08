@@ -5,6 +5,5 @@ name = "NyanwTool"
 tagline = "Workflow tools for creating ARkit and more blendshapes"
 maintainer = "Nyanwake <nyanwake@gmail.com>"
 type = "add-on"
-
-# Список поддерживаемых версий Blender, например:
 blender_version_min = "5.0.0"
+license = ["SPDX:GPL-3.0-or-later"]
